@@ -83,7 +83,7 @@ class ResNet101FC(nn.Module):
         return x
 
 
-#===============================================================================================
+# ===============================================================================================
 
 # Direct ResNet50 memorability estimation - no attention or RNN
 class ResNet50FT(nn.Module):
@@ -331,4 +331,5 @@ class AMemNetModel(nn.Module):
 
         missing = set(own_state.keys()) - set(state_dict.keys())
         if len(missing) > 0:
-            raise KeyError('missing keys in state_dict: "{}"'.format(missing))
+            pass
+            # raise KeyError('missing keys in state_dict: "{}"'.format(missing))

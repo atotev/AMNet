@@ -47,7 +47,8 @@ class PredictionResult():
 
         print('Id\tfilename'+(' '*(max_len-8+5))+'predicted\tGT')
         for i, (image, prediction, target) in enumerate(zip(self.image_names, self.predictions, self.targets)):
-            print(str(i)+'\t'+image + (' '*(max_len-len(image)+5)) + str(round(prediction,3)) + '  \t' + str(round(target,3)) )
+            pass
+            #print(str(i)+'\t'+image + (' '*(max_len-len(image)+5)) + str(round(prediction,3)) + '  \t' + str(round(target,3)) )
 
         return
 
@@ -56,7 +57,6 @@ class PredictionResult():
             for image, prediction, target in zip(self.image_names, self.predictions, self.targets):
                 f.write(image+' '+str(prediction)+' '+str(target)+'\n')
         return
-
 
     def get_attention_maps(self, show=False):
 
@@ -78,12 +78,14 @@ class PredictionResult():
             else:
                 img = self.images[b]
 
-            img = cv2.resize(img, out_size)
+            out_size = np.array(img.shape[:2]) // 2
+#             print("AGT1: " + str(img.shape[:2]))
+#             img = cv2.resize(img, out_size)
+#             print("AGT2: " + str(img.shape[:2]))
 
             # Create an empty output image
             offset = 20
-            canvas = np.zeros((224+offset*2+50, (224+offset*2)*(seq_len+1), 3), dtype=np.uint8)
-            canvas[offset:224+offset, offset:224+offset,:] = img
+            canvas = np.zeros((out_size[0]+offset*2+50, (out_size[1]+offset*2)*(seq_len), 3), dtype=np.uint8)
 
             amaps = []
 
@@ -123,16 +125,16 @@ class PredictionResult():
                 img_alpha = img_alpha.astype(np.uint8)
 
                 # Scale to the source image dimensions
-                heat_map_img = cv2.resize(img_alpha, out_size, interpolation=cv2.INTER_CUBIC)
+                heat_map_img = cv2.resize(img_alpha, (out_size[1], out_size[0]), interpolation=cv2.INTER_CUBIC)
                 heat_map_img = cv2.applyColorMap(heat_map_img, cv2.COLORMAP_JET)
 
                 alpha = 0.5
                 beta = (1.0 - alpha)
-                img_heat_map_blend = cv2.addWeighted(img, alpha, heat_map_img, beta, 0.0)
+#                 img_heat_map_blend = cv2.addWeighted(img, alpha, heat_map_img, beta, 0.0)
                 # amaps.append(img_heat_map_blend)
 
-                y_pos= (s+1) * (224+offset*2)
-                canvas[offset:224 + offset, y_pos+offset:y_pos+224+offset, :] = img_heat_map_blend
+                y_pos= (s) * (out_size[1]+offset*2)
+                canvas[offset:out_size[0] + offset, y_pos+offset:y_pos+out_size[1]+offset, :] = heat_map_img
 
             amaps.append(canvas)
 
@@ -423,11 +425,11 @@ class AMNet:
                         took_total_min, took_total,
                         epoch, batch_idx * len(data), total_samples,
                         100. * batch_idx / len(train_loader),
-                        loss.data[0], reg_loss.data[0], (att_loss.data[0] if att_loss is not None else 0), took))
+                        loss.data, reg_loss.data, (att_loss.data if att_loss is not None else 0), took))
 
             self.logger.write(train=True, epoch=epoch, epoch_samples=total_samples,
                               sample=(batch_idx * len(data)),
-                              loss=loss.cpu().data.numpy()[0], lr=params.lr)
+                              loss=loss.cpu().data.numpy(), lr=params.lr)
 
         # Finalize the training stage
         rc, mse = train_loader.dataset.getRankCorrelationWithMSE(predictions, gt=targets)
@@ -442,7 +444,7 @@ class AMNet:
 
         self.logger.write(train=True, epoch=epoch, epoch_samples=len(train_loader.dataset),
                           sample=(batch_idx * len(data)),
-                          loss=loss.cpu().data.numpy()[0], lr=params.lr, src=rc)
+                          loss=loss.cpu().data.numpy(), lr=params.lr, src=rc)
 
         #print("--------------------------------------------------------------------")
         return
@@ -512,9 +514,9 @@ class AMNet:
 
             reg_loss, att_loss, mem_loc_loss = self.get_losses(output, outputs, alphas, target, criterion)
 
-            test_att_loss += att_loss.cpu().data.numpy()[0] if att_loss is not None else 0
-            test_reg_loss += reg_loss.cpu().data.numpy()[0]
-            test_mem_loc_loss += mem_loc_loss.cpu().data.numpy()[0]
+            test_att_loss += att_loss.cpu().data.numpy() if att_loss is not None else 0
+            test_reg_loss += reg_loss.cpu().data.numpy()
+            test_mem_loc_loss += mem_loc_loss.cpu().data.numpy()
 
             batches += 1
 
@@ -612,9 +614,9 @@ class AMNet:
                 predictions.append(val)
 
             # Append results overl all batches
-            output = output_ if output is None else np.concatenate(output, output_)
-            outputs = outputs_ if outputs is None else np.concatenate(outputs, outputs_)
-            alphas = alphas_ if alphas is None else np.concatenate(alphas, alphas_)
+            output = output_ if output is None else np.concatenate((output, output_))
+            outputs = outputs_ if outputs is None else np.concatenate((outputs, outputs_))
+            alphas = alphas_ if alphas is None else np.concatenate((alphas, alphas_))
 
         if test_loader.dataset.valid_labels:
             rc, mse = test_loader.dataset.getRankCorrelationWithMSE(predictions, gt=targets)
